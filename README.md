@@ -12,6 +12,8 @@ reference baselines.
 From the repository root, create and activate the Python 3.12 environment:
 
 ```bash
+git clone https://github.com/safi111287/lab08-same-model-twice.git lab08-same-model-twice-test
+cd lab08-same-model-twice-test
 conda env create -f environment.yml
 conda activate lab08-same-model-twice
 ```

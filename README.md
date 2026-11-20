@@ -1,63 +1,53 @@
-# Lakeshore Bike Demand
+# Lakeshore Bike Demand: the same model in PyTorch and Keras
 
 ## What it does
 
 This project predicts hourly bike rentals for a station from the hour, weather,
-weekend status and station type. It compares a PyTorch neural network with a
-training-mean predictor and linear regression, using a manually written training
-loop. The estimates could help planners decide where to investigate demand before
-moving bikes.
+weekend status and station type. It trains the same neural network architecture
+in PyTorch and Keras, with a training-mean predictor and linear regression as
+reference baselines.
 
 ## How to run it
 
-Use Python 3.12 and run these commands from the repository root:
+From the repository root, create and activate the Python 3.12 environment:
 
 ```bash
-git clone https://github.com/safi111287/lab07-first-principles.git
-cd lab07-first-principles
 conda env create -f environment.yml
-conda activate lab07-first-principles
-python bikes_data.py
+conda activate lab08-same-model-twice
+```
+
+The environment uses conda-forge and installs the pinned dependencies from
+`requirements-dev.txt` and `requirements.txt`. The project uses Keras 3 with
+the TensorFlow backend and runs on CPU. The pinned PyTorch CPU wheel targets
+Windows and Linux on x86-64.
+
+```bash
 python train.py
+python train_keras.py
+python compare.py
 python -m ruff format --check .
 python -m ruff check .
 python -m pytest
 ```
 
-If the environment already exists, update it with
-`conda env update -n lab07-first-principles -f environment.yml`.
-The environment installs `requirements-dev.txt`, which includes the runtime
-requirements. Exact direct dependency versions are pinned. The PyTorch CPU wheel
-is pinned explicitly and its package index is included in `requirements.txt`;
-no CUDA installation or GPU is needed on Windows or Linux.
-
-On Windows, use Anaconda Prompt or select **Command Prompt** from the VS Code
-terminal menu before activating the environment. If needed, use:
-
-```bat
-conda.bat activate lab07-first-principles
-python -c "import sys; print(sys.executable)"
-```
-
-The printed path must point to `envs/lab07-first-principles`. Selecting the
-interpreter in VS Code does not necessarily activate an existing terminal.
-If PowerShell blocks activation scripts, use Command Prompt instead.
-
-If terminal activation selects a different Python, use the explicit environment:
+If the terminal does not activate Conda, run the same Python commands through
+the named environment:
 
 ```bash
-conda run --no-capture-output -n lab07-first-principles python train.py
-conda run -n lab07-first-principles python -m pytest
-conda run -n lab07-first-principles python -m ruff format --check .
-conda run -n lab07-first-principles python -m ruff check .
+conda run --no-capture-output -n lab08-same-model-twice python train.py
+conda run --no-capture-output -n lab08-same-model-twice python train_keras.py
+conda run --no-capture-output -n lab08-same-model-twice python compare.py
 ```
 
-`python train.py` regenerates all files in `reports/`: three learning-curve PNGs,
-three epoch-history CSVs, the experiment table, metrics JSON and the exploratory
-hourly-demand PNG. Paths are resolved relative to the source files. Reports are
-committed so the results can be read without running training. Test cases cover
-the split, preparation, Dataset, loaders, network and loop, including gradient
-clearing and restoration of the best weights.
+| Command | Reproduced files |
+|---|---|
+| `python train.py` | PyTorch histories and learning curves, baseline results, experiments and the training-data demand plot in `reports/` |
+| `python train_keras.py` | `reports/history_keras.csv`, `reports/metrics_keras.json`, `reports/learning_curves_keras.png`, and `checkpoints/best_keras.keras` |
+| `python compare.py` | `reports/equivalence.txt` and `reports/comparison.csv` |
+
+The reports are included. The binary Keras checkpoint directory is ignored by Git;
+the main training command recreates it. The comparison writes its checkpoints
+to a temporary directory and cleans them up when it finishes.
 
 ## Data and split
 
@@ -112,9 +102,8 @@ Python, NumPy and PyTorch use seed 2026. Each run resets initialization and the
 training DataLoader generator to that seed, uses CPU execution, one PyTorch thread
 and deterministic algorithms. Experiments share the same splits and initial
 architecture. Repeated runs on the same software and computer reproduce the
-numbers. Different platforms can produce numerical differences and select different
-best epochs; `metrics.json` records
-the runtime package versions. Reference execution used Python 3.12.16,
+numbers. Another platform may differ in the final digits; `metrics.json` records
+the runtime package versions. Reference execution used Python 3.12.14,
 torch 2.6.0+cpu, NumPy 2.3.5, pandas 2.2.3, scikit-learn 1.8.0 and
 matplotlib 3.10.8.
 
@@ -131,23 +120,22 @@ on the test set, and no settings were changed in response to the test result.
 |---|---:|---:|
 | Training mean | 9.951945 | 9.848395 |
 | Linear regression | 9.032177 | 8.762954 |
-| Neural network at restored epoch 238 | 2.571631 | 2.491182 |
+| Neural network at restored epoch 105 | 2.550627 | 2.421072 |
 
 The linear model improves slightly on a constant but still misses the curved
 hourly peaks and interactions visible in the training-data plot. The network
 learns these nonlinear patterns and has a substantially lower test MAE. An MAE
-of 2.491182 means the average absolute error is about 2.49 rentals per
+of 2.421072 means the average absolute error is about 2.42 rentals per
 station-hour on this synthetic test set; it is not an accuracy percentage.
-The selected network's test MSE is 13.355129 rentals squared.
+The selected network's test MSE is 12.803972 rentals squared.
 
 ![Main run training and validation MSE](reports/learning_curves.png)
 
-The main run reaches its lowest validation MSE, 14.062705, at epoch 238.
-At epoch 250, training MSE is 9.125448 and validation MSE is 15.312430.
-The lower training loss and worse final validation loss show a generalization
-gap and a reason to restore the best checkpoint rather than retain the final
-weights. These endpoint values alone do not establish a sustained overfitting
-trend. The restored epoch 238 is used for the final result.
+The main curve falls quickly, then improves more slowly. Its lowest validation
+MSE is 14.150525 at epoch 105. Training MSE continues down to 9.226685 at epoch
+250, while final validation MSE is 15.722697. That later gap and lack of sustained
+validation improvement suggest mild overfitting after the best checkpoint; the
+restored epoch 105 is used for the final result.
 
 ## Experiments
 
@@ -158,9 +146,9 @@ validation MSE across these three runs. The main run wins this comparison.
 
 | Run | Learning rate | Best epoch by MSE | Lowest validation MAE during run | Validation MAE at restored best MSE | Final training MSE | Final validation MSE |
 |---|---:|---:|---:|---:|---:|---:|
-| Main | 0.003 | 238 | 2.484661 | 2.571631 | 9.125448 | 15.312430 |
-| Slow learning | 1e-05 | 250 | 8.771483 | 9.135968 | 178.731081 | 179.955204 |
-| Fast learning | 0.1 | 67 | 2.827001 | 2.856122 | 16.128429 | 22.588268 |
+| Main | 0.003 | 105 | 2.497910 | 2.550627 | 9.226685 | 15.722697 |
+| Slow learning | 0.00001 | 250 | 8.771483 | 9.135968 | 178.731081 | 179.955205 |
+| Fast learning | 0.1 | 249 | 2.827001 | 2.902485 | 15.823998 | 22.059230 |
 
 MSE is in rentals squared; MAE is in rentals. The lowest validation MAE and the
 MAE at the minimum-MSE checkpoint can occur at different epochs, because MSE
@@ -168,8 +156,8 @@ penalizes large errors more strongly. The final-loss columns describe epoch 250,
 before best-weight restoration. `experiments.csv` also records the best MSE.
 
 **Main run:** It learns the main patterns and has the best validation MSE. Later
-training does not guarantee a better validation score, and the final epoch
-is worse than the restored checkpoint. This is the selected configuration.
+training brings limited validation benefit and mild overfitting, as described
+above. This is the selected configuration.
 
 **Slow learning:** At the same epoch budget, training and validation losses remain
 high and close together. The loss is still decreasing at epoch 250. This is
@@ -179,15 +167,63 @@ It might improve with more epochs, but that was not tested.
 
 ![Slow learning experiment](reports/curves_slow_learning.png)
 
-**Fast learning:** Its best validation MSE is 17.588444 at epoch 67, worse than
-14.062705 for the main run. At epoch 250, training MSE is 16.128429 and validation
-MSE is 22.588268. Continuing training beyond the best checkpoint does not improve
-the selected score. This is consistent with an excessive learning rate causing
-updates that fail to settle reliably, although endpoint values alone cannot
-separate instability from overfitting. The run still learns substantially more
-than the very slow run; it is not a complete failure to learn.
+**Fast learning:** It learns faster initially but has a noisier validation curve
+and a worse best MSE, 17.372640, than the main run. Its best checkpoint is epoch
+249, but the next epoch's validation MSE rises to 22.059230. The large learning
+rate causes unstable updates; best-weight restoration protects against retaining
+that worse final epoch. It does not diverge completely, and the results do not
+justify calling it a failure to learn.
 
 ![Fast learning experiment](reports/curves_fast_learning.png)
+
+## The Keras version
+
+The Sequential network in `keras_model.py` has the same configurable ReLU
+hidden layers and one linear output. Both main models have 2,689 trainable
+parameters. Keras reads the same float32 features and targets from
+`prepare.py`. The loss is MSE and both use Adam, learning rate 0.003, batches
+of 64, and 250 epochs. The comparison keeps the data split fixed and pairs
+training seeds 2026, 2027, and 2028.
+
+Before training, `compare.py` copies each PyTorch linear layer's weight matrix
+into its Keras Dense layer after transposing it, and copies the bias directly.
+The check passed on all 1,200 validation rows with `rtol=1e-5`, `atol=1e-6`,
+and a maximum absolute prediction difference of **2.98e-08 rentals**.
+
+Keras uses `compile` and `fit`. EarlyStopping restores the weights at the lowest
+validation MSE; patience is 250 so it does not shorten the comparison.
+ModelCheckpoint saves the best model to disk. The seed-2026 run restored epoch
+183, with validation MSE 13.3981 and test
+MAE 2.4714. The plot and CSV record the complete training run.
+
+![Keras training and validation MSE by epoch](reports/learning_curves_keras.png)
+
+Each final model is scored once on the test rows. The wall-clock time includes
+model setup and fitting, including Keras checkpoint writes, and excludes final
+scoring. Reference timing was measured on a Linux x86-64 AMD EPYC CPU. It will
+vary across runs and machines.
+
+| Framework | Seed | Best epoch | Validation MAE | Test MAE | Seconds |
+|---|---:|---:|---:|---:|---:|
+| PyTorch | 2026 | 105 | 2.5506 | 2.4211 | 12.79 |
+| Keras | 2026 | 183 | 2.4846 | 2.4714 | 18.74 |
+| PyTorch | 2027 | 198 | 2.4772 | 2.5234 | 11.60 |
+| Keras | 2027 | 250 | 2.5507 | 2.4141 | 17.79 |
+| PyTorch | 2028 | 159 | 2.5694 | 2.5838 | 11.50 |
+| Keras | 2028 | 125 | 2.5942 | 2.5011 | 18.77 |
+
+Mean test MAE across seeds was **2.5094** for PyTorch and
+**2.4622** for Keras. The difference is small, and the lower-error
+framework varied by seed. See [COMPARISON.md](COMPARISON.md) for the recommendation
+and the remaining differences in the training setup.
+
+## Tests
+
+The test suite covers the original PyTorch preparation, network, and training
+loop as well as Keras output shape, parameter counts for three architectures,
+prediction equivalence, shared rows, small-batch memorization, saving and
+reloading, best-weight restoration, and seeded repeatability. An additional
+square-kernel test verifies that omitting the transpose changes predictions.
 
 ## Limitations
 
